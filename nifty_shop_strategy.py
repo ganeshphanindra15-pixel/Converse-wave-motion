@@ -1,6 +1,6 @@
 """
-ASICS India Size Monitor - Telegram Bot
-Monitors GEL-NYC 2055 for UK Size 9 via GraphQL API.
+Converse India Size Monitor - Telegram Bot
+Monitors Wave Motion Trainer (A19128C-Black) for UK Size 9 availability.
 """
 
 import os
@@ -15,15 +15,16 @@ from datetime import datetime
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 BOT_TOKEN  = os.environ.get("BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
 CHAT_ID    = os.environ.get("CHAT_ID", "YOUR_TELEGRAM_CHAT_ID")
-CHECK_INTERVAL_MINUTES = int(os.environ.get("CHECK_INTERVAL_MINUTES", "60"))
+CHECK_INTERVAL_MINUTES = int(os.environ.get("CHECK_INTERVAL_MINUTES", "360"))
 # ──────────────────────────────────────────────────────────────────────────────
 
-PRODUCT_URL  = "https://www.asics.co.in/1203a755-020-gel-nyc-2055.html"
-PRODUCT_NAME = "ASICS GEL-NYC 2055"
-URL_KEY      = "1203a755-020-gel-nyc-2055"
-TARGET_SIZE_LABEL = "US10/UK9"   # This is how ASICS labels UK9
+PRODUCT_URL       = "https://www.converse.in/converse-wave-motion-trainer-a19128c-black.html"
+PRODUCT_NAME      = "Converse Wave Motion Trainer (Black)"
+URL_KEY           = "converse-wave-motion-trainer-a19128c-black"
+TARGET_SIZE_LABEL = "9 UK"
+TARGET_VALUE_INDEX = 226   # hardcoded from API response
 
-GRAPHQL_URL = "https://www.asics.co.in/graphql"
+GRAPHQL_URL = "https://www.converse.in/graphql"
 
 GRAPHQL_QUERY = """query getProductDetailForProductPage($urlKey: String!) {
   products(filter: {url_key: {eq: $urlKey}}) {
@@ -35,17 +36,7 @@ GRAPHQL_QUERY = """query getProductDetailForProductPage($urlKey: String!) {
           product {
             sku
             stock_status
-            custom_attributes {
-              selected_attribute_options {
-                attribute_option { label }
-              }
-              attribute_metadata { code }
-            }
           }
-        }
-        configurable_options {
-          label
-          values { label value_index }
         }
       }
     }
@@ -81,7 +72,7 @@ def fetch_size_status():
         "variables": {"urlKey": URL_KEY}
     }
     try:
-        log.info("Querying ASICS GraphQL API...")
+        log.info("Querying Converse India GraphQL API...")
         r = requests.post(GRAPHQL_URL, json=payload, headers=headers, timeout=20)
         log.info("Status: " + str(r.status_code) + " | Length: " + str(len(r.text)))
         if r.status_code == 200:
@@ -98,33 +89,17 @@ def check_uk9_availability(data):
         if not items:
             return False, "no items"
 
-        product = items[0]
-        name = product.get("name", PRODUCT_NAME)
-        variants = product.get("variants", [])
-        options = product.get("configurable_options", [])
+        variants = items[0].get("variants", [])
 
-        # Find value_index for UK9 from configurable_options
-        uk9_value_index = None
-        for option in options:
-            if option.get("label", "").upper() == "SIZE":
-                for v in option.get("values", []):
-                    if v.get("label", "") == TARGET_SIZE_LABEL:
-                        uk9_value_index = v["value_index"]
-                        log.info("Found UK9 value_index: " + str(uk9_value_index))
-                        break
-
-        if uk9_value_index is None:
-            return False, "UK9 size option not found in product"
-
-        # Find the variant with this value_index
         for variant in variants:
             for attr in variant.get("attributes", []):
-                if attr.get("code") == "size" and attr.get("value_index") == uk9_value_index:
+                if attr.get("code") == "size" and attr.get("value_index") == TARGET_VALUE_INDEX:
                     stock = variant["product"]["stock_status"]
-                    log.info("UK9 variant found | stock_status: " + stock)
+                    sku = variant["product"]["sku"]
+                    log.info("UK9 variant found | SKU: " + sku + " | stock_status: " + stock)
                     return stock == "IN_STOCK", "stock_status=" + stock
 
-        return False, "UK9 variant not found in variants list"
+        return False, "UK9 variant not found"
 
     except Exception as e:
         log.error("Parse error: " + str(e))
@@ -146,7 +121,7 @@ def send_telegram(message):
 def check_size_availability():
     global _last_notified_available
 
-    log.info("Checking UK9 availability for " + PRODUCT_NAME + "...")
+    log.info("Checking UK9 for " + PRODUCT_NAME + "...")
     data = fetch_size_status()
 
     if not data:
@@ -167,22 +142,22 @@ def check_size_availability():
         _last_notified_available = True
 
     elif not available and _last_notified_available is True:
-        send_telegram("UK Size 9 is no longer available for " + PRODUCT_NAME + "\nWill notify when it is back!")
+        send_telegram("UK Size 9 no longer available for " + PRODUCT_NAME + "\nWill notify when it is back!")
         _last_notified_available = False
     else:
         log.info("No state change, skipping notification.")
 
 def main():
     log.info("==================================================")
-    log.info("ASICS Size Monitor started")
+    log.info("Converse Size Monitor started")
     log.info("Product: " + PRODUCT_NAME)
     log.info("Target: " + TARGET_SIZE_LABEL)
     log.info("Interval: every " + str(CHECK_INTERVAL_MINUTES) + " minutes")
     log.info("==================================================")
     send_telegram(
-        "ASICS Size Monitor started!\n"
+        "Converse Size Monitor started!\n"
         "Watching: " + PRODUCT_NAME + "\n"
-        "Size: UK 9 (US10/UK9)\n"
+        "Size: 9 UK\n"
         "Checking every " + str(CHECK_INTERVAL_MINUTES) + " minutes."
     )
     check_size_availability()
